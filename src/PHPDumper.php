@@ -1,5 +1,9 @@
 <?php
 
+use Hoa\Ruler\Model\Bag\RulerArray;
+use Hoa\Ruler\Model\Bag\Scalar;
+use Hoa\Ruler\Model\Model;
+use Hoa\Ruler\Model\Operator;
 use PhpParser\Lexer;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\Array_;
@@ -7,13 +11,15 @@ use PhpParser\Node\Expr\ArrayItem;
 use PhpParser\Node\Expr\BinaryOp\Equal;
 use PhpParser\Node\Expr\BinaryOp\Greater;
 use PhpParser\Node\Expr\BinaryOp\GreaterOrEqual;
+use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
+use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\BinaryOp\LogicalXor;
 use PhpParser\Node\Expr\BinaryOp\NotEqual;
 use PhpParser\Node\Expr\BinaryOp\Smaller;
 use PhpParser\Node\Expr\BinaryOp\SmallerOrEqual;
 use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\FuncCall;
-use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\LNumber;
 use PhpParser\Node\Scalar\String;
@@ -24,124 +30,162 @@ class PHPDumper {
 
 	public function __construct() {
 		$this->parser = new Parser(new Lexer);
-		$this->counter = 0;
+//		$this->counterL = 0;
+//		$this->counterR = 0;
 	}
 
-	/**
-	 * I don't know how to directly get the Hoa AST tree.
-	 * Only output as string was available o_O
-	 */
-	public function AstConvert($string) {
-		try {
-			$stmts = $this->parser->parse($string);
-		} catch (PhpParser\Error $e) {
-			echo 'Parse Error: ', $e->getMessage();
+	public function L($in) {
+//echo 'L ' . $this->counterL++ . PHP_EOL;
+//var_dump($in);
+//echo PHP_EOL;
+
+		if ($in instanceof Scalar) {
+			$val = $in->getValue();
+			if (is_bool($val)) {
+				return new ConstFetch(new Name($val ? 'true' : 'false'));
+			}
+			if (is_numeric($val)) { // is_numeric ??
+				return new LNumber($val);
+			}
+			if (is_string($val)) {
+				return new String($val);
+			}
 		}
 
-		return $this->visit($stmts[1]);
-	}
-
-	private function visit($in) {
-		if ($in instanceof LNumber) {
-			return $this->getCleanClone($in);
-		}
-
-		if ($in instanceof String) {
-			return $this->getCleanClone($in);
-		}
-
-		if ($in instanceof Arg AND
-				$in->value instanceof String) {
-			return new Arg($this->visit($in->value), $in->byRef);
-		}
-
-		if ($in instanceof Arg AND
-				$in->value instanceof LNumber) {
-			return new Arg($this->visit($in->value), $in->byRef);
-		}
-
-		if ($in instanceof ArrayItem) {
-			return new ArrayItem($this->visit($in->value), $in->key, $in->byRef);
-		}
-
-		if ($in instanceof Arg AND
-				$in->value instanceof Array_) {
+		if ($in instanceof RulerArray) {
 			unset($return);
-			foreach ($in->value->items as $v) {
-				$return[] = $this->visit($v);
+			foreach ($in->getArray() as $v) {
+				$return[] = new ArrayItem($this->L($v));
 			}
 			return new Array_($return);
 		}
 
-		if ($in->value instanceof ConstFetch) {
-			return $this->getCleanClone($in->value);
-		}
-
-		if ($in->expr instanceof MethodCall) {
-			if ($in->expr->name === 'func' AND
-					$in->expr->args[0]->value->value === 'sum') {
-				unset($return);
-				foreach ($in->expr->args as $k => $arg) {
-					if ($k === 0) continue;
-					$return[] = $this->visit($arg);
+		$expr = $in->getExpression();
+		$name = $expr->getName();
+		$args = $expr->getArguments();
+		switch ($name) {
+			case 'and':
+			case 'or':
+			case 'xor':
+				$classname = 'PhpParser\\Node\\Expr\\BinaryOp\\Logical' . $name;
+				return new $classname($this->L($args[0]), $this->L($args[1]));
+				break;
+			case 'not':
+				return new BooleanNot($this->L($args[0]));
+				break;
+			case '=':
+			case 'is':
+				return new Equal($this->L($args[0]), $this->L($args[1]));
+				break;
+			case '!=':
+				return new NotEqual($this->L($args[0]), $this->L($args[1]));
+				break;
+			case '>':
+				return new Greater($this->L($args[0]), $this->L($args[1]));
+				break;
+			case '>=':
+				return new GreaterOrEqual($this->L($args[0]), $this->L($args[1]));
+				break;
+			case '<':
+				return new Smaller($this->L($args[0]), $this->L($args[1]));
+				break;
+			case '<=':
+				return new SmallerOrEqual($this->L($args[0]), $this->L($args[1]));
+				break;
+			case 'in':
+				// Packing argument
+				$args = [new Arg($this->L($args[0])), new Arg($this->L($args[1]))];
+				return new FuncCall(new Name('in_array'), $args);
+				break;
+			case 'sum':
+				unset($returnArgs);
+				foreach ($args as $v) {
+					$returnArgs[] = new Arg($this->L($v));
 				}
-				return new FuncCall(new Name('array_sum'), $return);
-			}
-
-			unset($return);
-			foreach ($in->expr->args as $v) {
-				$return[] = $this->visit($v);
-			}
-
-			switch ($in->expr->name) {
-				case 'or':
-				case 'and':
-				case 'xor':
-					$classname = 'PhpParser\\Node\\Expr\\BinaryOp\\Logical' . $in->expr->name;
-					return new $classname($return[0], $return[1]);
-					break;
-				case 'is':
-					return new Equal($return[0]->value, $return[1]->value);
-					break;
-				case 'in':
-					return new FuncCall(new Name('in_array'), $return);
-					break;
-				case 'not':
-					return new BooleanNot($in->expr->args[0]->value);
-			}
-
-			if ($in->expr->name instanceof String) {
-				switch ($in->expr->name->value) {
-					case '=':
-						return new Equal($return[0]->value, $return[1]->value);
-						break;
-					case '!=':
-						return new NotEqual($return[0]->value, $return[1]->value);
-						break;
-					case '>':
-						return new Greater($return[0]->value, $return[1]->value);
-						break;
-					case '>=':
-						return new GreaterOrEqual($return[0]->value, $return[1]->value);
-						break;
-					case '<':
-						return new Smaller($return[0]->value, $return[1]->value);
-						break;
-					case '<=':
-						return new SmallerOrEqual($return[0]->value, $return[1]->value);
-						break;
-				}
-			}
+				return new FuncCall(new Name('array_sum'), $returnArgs);
 		}
 	}
 
-	private function getCleanClone($obj) {
-		$obj = clone $obj;
+	public function R($in) {
+//echo 'R ' . $this->counterR++ . PHP_EOL;
+//var_dump($in);
+//echo PHP_EOL;
 
-		foreach ($obj->getAttributes() as $k => $v) {
-			$obj->setAttribute($k, null);
+		// Unpacking the argument
+		if ($in instanceof Arg) {
+			$in = $in->value;
 		}
 
-		return $obj;
+		$fqcn = get_class($in);
+		$class = substr($fqcn, strrpos($fqcn, '\\') + 1);
+
+		if ($in instanceof Array_) {
+			unset($return);
+			foreach ($in->items as $v) {
+				$return[] = $this->R($v->value);
+			}
+			return new RulerArray($return);
+		}
+
+		if ($in instanceof ConstFetch) {
+			if ($in->name->parts[0] === 'true') {
+				return new Scalar(true);
+			}
+			if ($in->name->parts[0] === 'false') {
+				return new Scalar(false);
+			}
+		}
+
+		if (($in instanceof LNumber) OR
+				($in instanceof String)) {
+			return new Scalar($in->value);
+		}
+
+		if (substr($class, 0, 7) === 'Logical') {
+			$operator = strtolower(substr($class, 7));
+			return $this->getHoaModel($operator, [$this->R($in->left), $this->R($in->right)]);
+		}
+
+		switch ($class) {
+			case 'NotEqual':
+				return $this->getHoaModel('!=', [$this->R($in->left), $this->R($in->right)]);
+				break;
+			case 'Equal':
+				return $this->getHoaModel('=', [$this->R($in->left), $this->R($in->right)]);
+				break;
+			case 'BooleanNot':
+				return $this->getHoaModel('not', [$this->R($in->expr)]);
+				break;
+			case 'Greater':
+				return $this->getHoaModel('>', [$this->R($in->left), $this->R($in->right)]);
+				break;
+			case 'GreaterOrEqual':
+				return $this->getHoaModel('>=', [$this->R($in->left), $this->R($in->right)]);
+				break;
+			case 'Smaller':
+				return $this->getHoaModel('<', [$this->R($in->left), $this->R($in->right)]);
+				break;
+			case 'SmallerOrEqual':
+				return $this->getHoaModel('<=', [$this->R($in->left), $this->R($in->right)]);
+				break;
+			case 'FuncCall':
+				if ($in->name->parts[0] === 'in_array') {
+					return $this->getHoaModel('in', [$this->R($in->args[0]), $this->R($in->args[1])]);
+				}
+				if ($in->name->parts[0] === 'array_sum') {
+					unset($returnArgs);
+					foreach ($in->args as $v) {
+						$returnArgs[] = $this->R($v);
+					}
+					return $this->getHoaModel('sum', $returnArgs, true);
+				}
+				break;
+		}
+	}
+
+	private function getHoaModel($operator, $args, $function = false) {
+		$model = new Model();
+		$model->_root = new Operator($operator, $args, $function);
+		return $model;
 	}
 }
