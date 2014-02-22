@@ -244,7 +244,7 @@ class PHPDumper {
 	}
 
 	public function getClosures($ruler) {
-		$operators = $ruler->getDefaultAsserter()->getOperators();
+		$operators = $ruler->getAsserter()->getOperators();
 
 		$callbacks = [];
 		foreach ($operators as $name => $operator) {
@@ -288,7 +288,7 @@ class PHPDumper {
 				$start == $stmt->getAttribute('startLine') AND
 				$end == $stmt->getAttribute('endLine')) {
 					// The return statement is specific for a statement like this:
-					// $ruler->getDefaultAsserter()->setOperator('foo', function() {
+					// $ruler->getAsserter()->setOperator('foo', function() {
 					// 	return 'bar';
 					// });
 					return $stmt->args[1]->value;

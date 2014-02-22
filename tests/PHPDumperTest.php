@@ -4,6 +4,7 @@ use PhpParser\PrettyPrinter\Standard;
 use Hoa\Ruler\Ruler;
 use PhpParser\Lexer;
 use PhpParser\Parser;
+use Hoa\Ruler\Visitor\Asserter;
 
 class PHPDumperTest extends PHPUnit_Framework_TestCase {
 	protected static $prettyPrinter;
@@ -302,10 +303,13 @@ class PHPDumperTest extends PHPUnit_Framework_TestCase {
 	public function testClosure1() {
 		$dumper = new PHPDumper();
 
-		$ruler = new Ruler();
-		$ruler->getDefaultAsserter()->setOperator('foo', function() {
+		$asserter = new Asserter();
+		$asserter->setOperator('foo', function() {
 			return 'bar';
 		});
+
+		$ruler = new Ruler();
+		$ruler->setAsserter($asserter);
 
 		$phpAst = $dumper->getClosures($ruler)['foo'];
 		$php = $this->astToPhp($phpAst);
@@ -381,10 +385,13 @@ EOD;
 		$dumper = new PHPDumper();
 
 		// Setup the closure
-		$ruler = new Ruler();
-		$ruler->getDefaultAsserter()->setOperator('foo', function() {
+		$asserter = new Asserter();
+		$asserter->setOperator('foo', function() {
 			return 'bar';
 		});
+
+		$ruler = new Ruler();
+		$ruler->setAsserter($asserter);
 
 		$closuresPhpAst = $dumper->getClosures($ruler);
 
@@ -418,8 +425,6 @@ EOD;
 
 		require_once 'user.php'; // eeeww :(
 
-		$ruler = new Hoa\Ruler\Ruler();
-
 		// New rule.
 		$rule  = 'logged(user) and group in ("customer", "guest") and points > 30';
 
@@ -435,10 +440,14 @@ EOD;
 		};
 
 		// We add the logged() operator.
-		$ruler->getDefaultAsserter()->setOperator('logged', function ( User $user ) {
+		$asserter = new Asserter($context);
+		$asserter->setOperator('logged', function ( User $user ) {
 
 				return $user::CONNECTED === $user->getStatus();
 		});
+
+		$ruler = new Ruler();
+		$ruler->setAsserter($asserter);
 
 		// We add the secret sauce.
 		$closuresPhpAst = $dumper->getClosures($ruler);
