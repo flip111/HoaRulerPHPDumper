@@ -1,9 +1,6 @@
 HoaRulerPHPDumper
 =================
 
-## Warning ##
-This library assumes `Hoa\Ruler::getAsserter()` does not require a `Hoa\Ruler\Context` to be passed in (which it does at the current moment of writing).
-
 ## Introduction ##
 There are several libraries out for PHP which allow you to interpret another language in PHP. For example [Symfony Expression Language Component](http://symfony.com/doc/current/components/expression_language/index.html) and the [Hoa\Ruler](https://github.com/hoaproject/Ruler). However when executing this "expression language" or "rule" it has overhead from the given libraries instead of being able to execute the code directly. This library attempts to convert the rule from `Hoa\Ruler` to native PHP code.
 
