@@ -5,6 +5,7 @@ HoaRulerPHPDumper
 There are several libraries out for PHP which allow you to interpret another language in PHP. For example [Symfony Expression Language Component](http://symfony.com/doc/current/components/expression_language/index.html) and the [Hoa\Ruler](https://github.com/hoaproject/Ruler). However when executing this "expression language" or "rule" it has overhead from the given libraries instead of being able to execute the code directly. This library attempts to convert the rule from `Hoa\Ruler` to native PHP code.
 
 This opens new possiblities for this library, namely:
+
 1. The native PHP code can be cached for fast execution in production environments.
 2. To be used as a code generator.
 
