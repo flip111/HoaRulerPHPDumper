@@ -44,7 +44,7 @@ $context['user'] = function ( ) use ( $context ) {
 $asserter = new Asserter($context);
 $asserter->setOperator('logged', function ( User $user ) {
 
-		return $user::CONNECTED =## $user->getStatus();
+		return $user::CONNECTED === $user->getStatus();
 });
 
 $ruler = new Ruler();
@@ -57,7 +57,7 @@ $dumper = new PHPDumper(); // Initialize a new PHPDumper object
 
 $closuresPhpAst = $dumper->getClosures($ruler); // Get the PHP-AST for the Hoa\Ruler Operators
 
-$phpAst = $dumper->L(Ruler::interprete($rule)); // Get the PHP-AST for the Hoa\Ruler rule
+$phpAst = $dumper->L(Ruler::interprete($rule)); // Get the PHP-AST for the Hoa\Ruler model
 
 $packedPhpAst = $dumper->pack($phpAst, $closuresPhpAst); // Pack both the rule and it's operators into a single closure (still outputs PHP-AST)
 
